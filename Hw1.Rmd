@@ -1,0 +1,266 @@
+---
+title: "Hw 1"
+author: "Joseph Monahan Saager Buch Phillip An"
+date: "2023-01-30"
+output: md_document
+---
+# ECO395M HOMEWORK 1
+## Joseph Monahan, Saager Buch, Phillip An
+
+```{r 1, echo=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+library(ggplot2)
+library(tidyverse)
+library(knitr)
+library(caret)
+library(rsample)
+library(modelr)
+library(readr)
+library(dplyr)
+ABIA = read.csv("/Users/joemonahan/Documents/Data Mining/ABIA.csv")
+
+
+# 1) Data visualization: flights at ABIA 
+
+summary(ABIA$TaxiIn)
+
+
+ggplot(ABIA, aes(x = ArrTime, y = TaxiIn))+
+  geom_point()+
+    facet_wrap(~DayOfWeek)
+
+```
+
+As someone who has suffered from excessive taxi in time on multiple occasions when landing at the Austin Bergstrom Airport, I was very interested in what days of the week and arrival times had the longest taxi in times in 2008. I am sure this has changed drastically given the meteoric rise in popularity of Austin within the last decade. From the graph above we can see that it there
+
+```{r 1b, echo=FALSE}
+
+ABIA = ABIA %>%
+mutate(total_lost_time = (SecurityDelay+CarrierDelay+NASDelay+WeatherDelay+
+                        LateAircraftDelay+TaxiOut),na.rm=TRUE)
+
+ggplot(ABIA, aes(x = CRSDepTime, y = total_lost_time))+
+  geom_point()+
+    facet_wrap(~DayOfWeek)
+
+```
+
+
+I was also interested in which scheduled departure times and days of the week  departures suffered the most amount of lost time from all different forms of delays and taxi out time. I created a variable called total_lost_time, summing the delay time and the taxi out time. I then proceeded to plot this using facewrap by day of the week. From this plot, it can be said that most time lost from delays and taxiing seems to be during the week day evenings. One day and time that particularly stuck out was departure time at 8 pm on Sundays. Saturdays appear to be one of the better days to fly on. 
+
+```{r 1c, echo=FALSE}
+
+ggplot(ABIA, aes(x = UniqueCarrier, y = total_lost_time))+
+  geom_point()
+table(ABIA$UniqueCarrier)
+
+
+
+
+```
+
+To analyze which carries made passengers suffer the most time lost, the graph above plots the Carries against the total lost time. It seems like JetBlue (B6), Continental (CO), and American Airlines (AA) all have more lost time than the rest of the airlines. It should be noted that American Airlines had the second most amount of flights, while Jet Blue had far less flights.
+
+
+
+```{r 2A, echo=FALSE}
+# 2) Wrangling the Olympics
+# 2A
+olympics = read_csv("/Users/joemonahan/Documents/Data Mining/olympics_top20.csv")
+
+
+Olymp2a = olympics %>%
+  filter(sex == "F", sport == "Athletics")
+quantile(Olymp2a$height, .95)
+```
+
+The 95% of heights for female competitors across all Athletics events is 183 cm.
+
+```{r 2B, echo=FALSE}
+# 2B
+olympicsd = olympics %>% 
+  filter(sex == "F") %>%
+  group_by(event) %>%
+  summarise(sdheight = sd(height)) 
+
+olympicsd[order(-olympicsd$sdheight),]
+
+```
+The women's event had the greatest variability in competitor's heights as measured by the standard deviation is Rowing Women's Coxed Fours with a standard deviation of 10.9.
+
+```{r 2C, echo=FALSE}
+# 2C
+swimmers = olympics %>%
+  filter(sport == "Swimming")%>%
+  group_by(sex, year) %>%
+  summarise(avg_age = mean(age))
+
+ggplot(swimmers, aes(x = year, y = avg_age, color = sex)) + geom_line()+ggtitle("Olympic Swimmers Average Age")+labs(y= "Average Age", x = "Year")
+
+```
+The graph above shows that the average age is relatively stable from approximately 1940 until around 1980. After 1980, the average age begins to rise for both men and women, but women's average age appears to increase at a faster rate especially in the 1990's.
+
+```{r 3, include=FALSE}
+# 3) K-nearest neighbors: cars
+#1  Split the data into a training and a testing set.
+
+SClass = read.csv("/Users/joemonahan/Documents/Data Mining/sclass.csv")
+
+Trim350  = SClass %>% 
+  filter(trim == "350")
+
+Trim65AMG  = SClass %>% 
+  filter(trim == "65 AMG")
+```
+
+```{r 3.1, include=FALSE}
+split350 =  initial_split(Trim350, prop=0.7)
+train_350 = training(split350)
+test_350  = testing(split350)
+```
+
+```{r 3.2.350, include=FALSE}
+Knn2 <- knnreg(price~mileage, train_350, k = 2)
+
+y_hat2 <- test_350 %>% mutate(p_price = predict(Knn2,test_350))
+rmse(Knn2, y_hat2)
+
+set.seed(123)
+## Attempt for loop
+KNNvector= c(2:332)
+modeliterations = list()
+predictions = list()
+rmsevector = c()
+
+## for loop trim = 350
+
+for (i in 2:length(KNNvector)){
+  modeliterations[[i]] = knnreg(price~mileage, data = train_350, k =  KNNvector[i])
+predictions[i] = test_350 %>%
+  mutate(predprice = predict(modeliterations[[i]], test_350))
+
+rmsevector[i] = modelr::rmse(modeliterations[[i]], test_350)
+}
+
+KNNvector
+modeliterations
+predictions
+rmsevector 
+
+plot(KNNvector, rmsevector)
+rmse_knn = data.frame(KNNvector, rmsevector)
+rmse_knn
+min(rmse_knn$rmsevector, na.rm = TRUE)
+minmatrix = data_frame(KNNvector, rmsevector)
+
+
+
+
+## 350 trim - k vs. RMSE plot 
+
+plot(KNNvector, rmsevector)
+```
+The smallest RMSE value 9529.109 which belongs to the 13th nearest neighbor.
+
+```{r 3.2.350KNN13, include=FALSE}
+KNN13 = knnreg( price ~ mileage, data=train_350, k=13)
+
+# Prediciton for KNN 13
+predictions_13 = test_350 %>%
+  mutate(predprice13 = predict(KNN13, test_350))
+
+##RMSE KNN3
+modelr::rmse(KNN13, predictions_13)
+
+## Plot KNN13
+
+ptest = ggplot(data = predictions_13) + 
+  geom_point(mapping = aes(x = mileage, y = price), alpha=0.2) + 
+  ylim(7000, 20000)
+ptest
+
+ptest + geom_line(aes(x = mileage, y = predprice13), color='blue', size=1)+ggtitle("Knn 13 Price Predictions") 
+
+```
+
+```{r 3plot350, echo=FALSE}
+
+plot(KNNvector, rmsevector)+title("RMSE of KNNs") 
+```
+
+
+```{r 3.2.65setseed, echo=FALSE}
+set.seed(123)
+## Attempt for loop
+```
+
+```{r taintestsplit}
+split65 =  initial_split(Trim65AMG, prop=0.7)
+train_65 = training(split65)
+test_65  = testing(split65)
+```
+
+```{r 3.2.65, echo=FALSE}
+KNNvector65= c(2:204)
+modeliterations65 = list()
+predictions65 = list()
+rmsevector65 = c()
+
+
+
+for (i in 2:length(KNNvector65)){
+  modeliterations65[[i]] = knnreg(price~mileage, data = train_65, k =  KNNvector65[i])
+predictions65[i] = test_65 %>%
+  mutate(predprice65 = predict(modeliterations65[[i]], test_65))
+rmsevector65[i] = modelr::rmse(modeliterations65[[i]], test_65)
+}
+
+
+plot(KNNvector65, rmsevector65)
+
+rmse_knn65 = data.frame(KNNvector65, rmsevector65)
+
+min(rmse_knn65$rmsevector65, na.rm = TRUE)
+
+
+minmatrix65 = data.frame(KNNvector65, rmsevector65)
+
+min(minmatrix65$rmsevector65)
+
+plot(KNNvector65, rmsevector65)
+```
+
+The smallest RMSE value 13206.66 which belongs to the 15th nearest neighbor.
+
+
+```{r 3.2.65pred, echo=FALSE}
+
+
+KNN15 = knnreg( price ~ mileage, data=train_65, k=15)
+
+# Prediciton for KNN 15
+predictions_15 = test_65 %>%
+  mutate(predprice15 = predict(KNN15, test_65))
+
+##RMSE KNN3
+modelr::rmse(KNN15, predictions_15)
+
+## Plot KNN13
+
+ptest65 = ggplot(data = predictions_15) + 
+  geom_point(mapping = aes(x = mileage, y = price), alpha=0.2) + 
+  ylim(700, 100000)
+ptest65
+
+ptest65 + geom_line(aes(x = mileage, y = predprice15), color='blue', size=1)+ggtitle("Knn 15 Price Predictions") 
+
+```
+
+```{r 3plot65, echo=FALSE}
+
+plot(KNNvector65, rmsevector65)+title("RMSE of KNNs")
+
+```
+
